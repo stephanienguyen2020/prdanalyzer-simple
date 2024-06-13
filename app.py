@@ -8,6 +8,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from openai import OpenAI
 import os
+import re
 
 # Load the .env file
 load_dotenv()
@@ -55,6 +56,11 @@ def extract_text_from_docx(docx):
         text += paragraph.text + "\n"
     return text
 
+def clean_text(text):
+    # Remove non-XML compatible characters
+    text = re.sub(r'[^\x09\x0A\x0D\x20-\x7F]+', '', text)
+    return text
+
 def main():
     st.header("PRD Analyzer 🚨")
     add_vertical_space(2)
@@ -77,6 +83,7 @@ def main():
                 st.error("Unable to extract text from the uploaded document. Please check the file and try again.")
                 return
             
+            text = clean_text(text)
             store_name = uploaded_file.name.rsplit('.', 1)[0]
             st.write(f'Processing file: {store_name}')
     
@@ -99,6 +106,32 @@ def main():
             
             st.subheader("Potential Abuse Cases and Control Methods:")
             st.write(findings)
+
+            # Display options for each recommendation
+            recommendations = findings.split('\n\n') 
+            new_doc.add_heading('PRD Document', 0)
+            new_doc.add_paragraph(text)
+
+            new_doc.add_heading('Appendix: Abuse Cases and Recommendations', 1)
+            for rec in recommendations:
+                st.write(rec)
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button('Create a Jira Tix', key=f'jira_{rec[:30]}'):
+                        st.write('Jira ticket creation simulated.')
+                with col2:
+                    if st.button('Auto Fix', key=f'autofix_{rec[:30]}'):
+                        new_doc.add_paragraph(rec)
+                with col3:
+                    if st.button('Skip', key=f'skip_{rec[:30]}'):
+                        st.write('Skipped recommendation.')
+            
+            st.subheader("Export Modified PRD Document")
+            if st.button('Export Document'):
+                new_doc_path = f"{store_name}_modified.docx"
+                new_doc.save(new_doc_path)
+                with open(new_doc_path, 'rb') as f:
+                    st.download_button('Download Modified PRD', f, file_name=new_doc_path)
                 
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
